@@ -106,6 +106,7 @@ export function parseLocalizedNumber(value) {
   }
 
   raw = raw.replace(/[^0-9.+-]/g, '');
+  if (!raw || !/[0-9]/.test(raw)) return NaN;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : NaN;
 }
