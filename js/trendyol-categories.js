@@ -71,9 +71,9 @@ async function parseResponse(response, fallbackMessage) {
   return payload;
 }
 
-async function requestCategories(url, options, fetchImpl) {
+async function requestCategoryLevel(url, options, fetchImpl) {
   const payload = await parseResponse(await fetchImpl(url, options), 'Category request failed');
-  if (!Array.isArray(payload.categories)) throw new Error('Category response is missing categories.');
+  if (!Array.isArray(payload.nodes)) throw new Error('Category response is missing nodes.');
   return payload;
 }
 
@@ -90,11 +90,17 @@ async function requestCategoryAttributes(categoryId, force, fetchImpl) {
 }
 
 export function loadTrendyolCategories(fetchImpl = fetch) {
-  return requestCategories('/api/trendyol/categories', { method: 'GET' }, fetchImpl);
+  return requestCategoryLevel('/api/trendyol/categories', { method: 'GET' }, fetchImpl);
 }
 
 export function refreshTrendyolCategories(fetchImpl = fetch) {
-  return requestCategories('/api/trendyol/categories/refresh', { method: 'POST' }, fetchImpl);
+  return requestCategoryLevel('/api/trendyol/categories/refresh', { method: 'POST' }, fetchImpl);
+}
+
+export function loadTrendyolCategoryChildren(parentId, fetchImpl = fetch) {
+  const id = Number(parentId);
+  if (!Number.isInteger(id) || id <= 0) throw new Error('A valid Trendyol parent category ID is required.');
+  return requestCategoryLevel(`/api/trendyol/categories/children?parentId=${id}`, { method: 'GET' }, fetchImpl);
 }
 
 export function loadTrendyolCategoryAttributes(categoryId, fetchImpl = fetch) {
