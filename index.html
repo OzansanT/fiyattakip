@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>FiyatTakip — Kârlılık Analizi</title>
   <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/trendyol-attributes.css">
+  <link rel="stylesheet" href="css/trendyol-picker.css">
 </head>
 <body>
   <main class="app-shell">
@@ -13,43 +13,61 @@
       <div>
         <p class="eyebrow">FiyatTakip MVP</p>
         <h1>Ürün almaya değer mi?</h1>
-        <p>Trendyol kategori ağacını güncel tut, ürünleri doğru yaprak kategoriye indir ve pazaryeri maliyetlerini hesaba kat.</p>
+        <p>Önce yalnızca Trendyol kategori adlarını getir; sonra istediğin kategoriyi ve ürün sayısını seçerek mağaza ürünlerini kontrollü biçimde al.</p>
       </div>
       <div id="decision" class="decision bad">HESAPLANIYOR</div>
     </header>
 
-    <section class="panel category-sync-panel">
-      <div class="category-sync-header">
+    <section class="panel trendyol-picker-panel">
+      <div class="picker-header">
         <div>
-          <p class="eyebrow">Trendyol kategori senkronizasyonu</p>
-          <h2>Kategorileri adım adım seç</h2>
-          <p class="hint">Kategori ağacı sunucu tarafından güvenli şekilde alınır ve 24 saat önbellekte tutulur. Alt seviyeler ağacın yerel kopyasından açılır.</p>
+          <p class="eyebrow">Trendyol kontrollü getirme</p>
+          <h2>1. Kategori adlarını getir → 2. Kategori seç → 3. Ürün sayısını belirle</h2>
+          <p class="hint">Sayfa açılırken Trendyol'a otomatik istek yapılmaz. Ürünler yalnızca sen “Ürünleri Getir” dediğinde istenir.</p>
         </div>
-        <button id="refreshTrendyolCategories" class="secondary-action" type="button">Şimdi Yenile</button>
-      </div>
-      <div class="category-sync-meta">
-        <span id="trendyolCategoryStatus" class="sync-badge">Kategori verisi yükleniyor…</span>
-        <span id="trendyolCategoryStats" class="hint">—</span>
-      </div>
-      <div id="trendyolCategoryLevels" class="category-levels" aria-label="Trendyol kategori seviyeleri"></div>
-      <div class="selected-category-card">
-        <span>Seçilen Trendyol kategorisi</span>
-        <strong id="trendyolCategoryPath">Henüz kategori seçilmedi</strong>
-        <small id="trendyolCategoryId">En alt seviyeye kadar ilerle.</small>
+        <div class="picker-actions">
+          <button id="fetchTrendyolCategoryNames" class="secondary-action" type="button">Kategori Adlarını Getir</button>
+          <button id="refreshTrendyolCategoryNames" class="secondary-action" type="button">Kategori Adlarını Yenile</button>
+        </div>
       </div>
 
-      <div class="category-attributes-card">
-        <div>
-          <span>Yaprak kategori özellikleri</span>
-          <strong id="trendyolAttributeTitle">Önce yaprak kategori seç</strong>
-          <small id="trendyolAttributeStatus">Özellikler toplu indirilmez; yalnızca seçtiğin yaprak kategori için istek yapılır.</small>
+      <div class="category-sync-meta">
+        <span id="trendyolCategoryStatus" class="sync-badge">Henüz Trendyol isteği yapılmadı.</span>
+        <span id="trendyolCategoryStats" class="hint">Önce kategori adlarını getir.</span>
+      </div>
+
+      <div class="picker-grid">
+        <div class="category-picker">
+          <label>Kategori ara
+            <input id="trendyolCategorySearch" type="search" placeholder="Örn. mouse, kahve, sandalye">
+          </label>
+          <label>Trendyol yaprak kategorisi
+            <select id="trendyolCategorySelect" size="8" aria-label="Trendyol kategori adları">
+              <option value="">Önce kategori adlarını getir</option>
+            </select>
+          </label>
+          <div class="selected-category-card">
+            <span>Seçilen kategori</span>
+            <strong id="trendyolSelectedCategory">Kategori seçilmedi.</strong>
+          </div>
         </div>
-        <div class="attribute-actions">
-          <button id="loadTrendyolAttributes" class="secondary-action" type="button" disabled>Özellikleri Yükle</button>
-          <button id="refreshTrendyolAttributes" class="secondary-action" type="button" disabled>Özellikleri Yenile</button>
+
+        <div class="product-fetch-control">
+          <label>Kaç ürün getirilsin?
+            <input id="trendyolProductCount" type="number" min="1" max="100" step="1" value="10">
+          </label>
+          <button id="fetchTrendyolProducts" class="primary-action" type="button" disabled>Ürünleri Getir</button>
+          <p id="trendyolProductStatus" class="hint" aria-live="polite">Kategori seçildiğinde ürün getirme aktif olur.</p>
+          <p class="hint">Trendyol V2, onaylı mağaza ürünlerini doğrudan kategori ID ile filtrelemiyor. FiyatTakip sayfa sayfa kontrol eder, istediğin adet bulununca durur ve en fazla 10 sayfa tarar.</p>
         </div>
-        <p id="trendyolAttributeSummary" class="hint">Henüz özellik isteği yapılmadı.</p>
-        <div id="trendyolAttributeList" class="attribute-list" aria-live="polite"></div>
+      </div>
+
+      <div id="trendyolProductEmpty" class="empty-state">Henüz ürün isteği yapılmadı.</div>
+      <div class="table-wrap">
+        <table id="trendyolProductTable" hidden>
+          <thead><tr><th>Ürün</th><th>Kategori</th><th>Satış</th><th>Stok</th><th>Varyant</th><th></th></tr></thead>
+          <tbody id="trendyolProductRows"></tbody>
+        </table>
       </div>
     </section>
 
