@@ -32,16 +32,40 @@ async function withStore(mode, fn) {
   });
 }
 
-export async function saveOpportunity(opportunity) {
-  const now = new Date().toISOString();
-  const record = {
+function prepareRecord(opportunity, now = new Date().toISOString()) {
+  return {
     ...opportunity,
     id: opportunity.id || crypto.randomUUID(),
     createdAt: opportunity.createdAt || now,
     updatedAt: now
   };
+}
+
+export async function saveOpportunity(opportunity) {
+  const record = prepareRecord(opportunity);
   await withStore('readwrite', store => store.put(record));
   return record;
+}
+
+export async function saveOpportunities(opportunities) {
+  const list = Array.isArray(opportunities) ? opportunities : [];
+  if (!list.length) return [];
+
+  const db = await openDb();
+  const now = new Date().toISOString();
+  const records = list.map(opportunity => prepareRecord(opportunity, now));
+
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    records.forEach(record => store.put(record));
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('Toplu kayıt işlemi iptal edildi.'));
+  });
+
+  db.close();
+  return records;
 }
 
 export async function listOpportunities() {

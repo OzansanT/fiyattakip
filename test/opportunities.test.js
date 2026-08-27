@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildOpportunity, sortOpportunities } from '../js/opportunities.js';
+import { buildOpportunity, filterOpportunities, sortOpportunities } from '../js/opportunities.js';
 
 const sampleInputs = {
   salePrice: 1000,
@@ -29,6 +29,25 @@ test('buildOpportunity snapshots calculator inputs and derived metrics', () => {
 test('buildOpportunity falls back to a safe product name', () => {
   const item = buildOpportunity({ name: '   ', inputs: {} });
   assert.equal(item.name, 'Adsız Ürün');
+});
+
+test('filterOpportunities searches name/category and combines ROI/status filters', () => {
+  const items = [
+    { id: 'a', name: 'Mouse A', category: 'electronics', roi: 35, status: 'good' },
+    { id: 'b', name: 'Koltuk', category: 'home', roi: 12, status: 'bad' },
+    { id: 'c', name: 'Mouse Pad', category: 'electronics', roi: 45, status: 'excellent' }
+  ];
+
+  assert.deepEqual(filterOpportunities(items, { query: 'mouse' }).map(x => x.id), ['a', 'c']);
+  assert.deepEqual(filterOpportunities(items, { query: 'HOME' }).map(x => x.id), ['b']);
+  assert.deepEqual(filterOpportunities(items, { minRoi: 30 }).map(x => x.id), ['a', 'c']);
+  assert.deepEqual(filterOpportunities(items, { minRoi: '', status: 'bad' }).map(x => x.id), ['b']);
+  assert.deepEqual(filterOpportunities(items, { minRoi: 40, status: 'excellent' }).map(x => x.id), ['c']);
+});
+
+test('empty ROI filter does not hide negative-ROI opportunities', () => {
+  const items = [{ id: 'loss', name: 'Loss', roi: -5, status: 'bad' }];
+  assert.deepEqual(filterOpportunities(items, { minRoi: '' }).map(x => x.id), ['loss']);
 });
 
 test('sortOpportunities supports ROI, profit, safety margin and capital order', () => {

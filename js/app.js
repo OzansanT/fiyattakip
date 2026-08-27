@@ -1,6 +1,7 @@
 import { calculate, formatPercent, formatTry } from './calculator.js';
-import { buildOpportunity, sortOpportunities } from './opportunities.js';
-import { deleteOpportunity, listOpportunities, saveOpportunity } from './storage.js';
+import { parseOpportunityImport } from './importer.js';
+import { buildOpportunity, filterOpportunities, sortOpportunities } from './opportunities.js';
+import { deleteOpportunity, listOpportunities, saveOpportunity, saveOpportunities } from './storage.js';
 
 const ids = [
   'purchasePrice','salePrice','commissionRate','advertisingRate','returnReserveRate',
@@ -18,6 +19,13 @@ const category = document.getElementById('category');
 const saveButton = document.getElementById('saveOpportunity');
 const saveStatus = document.getElementById('saveStatus');
 const sortSelect = document.getElementById('opportunitySort');
+const searchInput = document.getElementById('opportunitySearch');
+const minRoiInput = document.getElementById('opportunityMinRoi');
+const statusSelect = document.getElementById('opportunityStatus');
+const countLabel = document.getElementById('opportunityCount');
+const fileInput = document.getElementById('opportunityFile');
+const importButton = document.getElementById('importOpportunities');
+const importStatus = document.getElementById('importStatus');
 const table = document.getElementById('opportunityTable');
 const rows = document.getElementById('opportunityRows');
 const emptyState = document.getElementById('opportunityEmpty');
@@ -70,10 +78,22 @@ function statusLabel(status) {
 }
 
 function renderOpportunities() {
-  const sorted = sortOpportunities(opportunities, sortSelect.value);
+  const filtered = filterOpportunities(opportunities, {
+    query: searchInput.value,
+    minRoi: minRoiInput.value,
+    status: statusSelect.value
+  });
+  const sorted = sortOpportunities(filtered, sortSelect.value);
   rows.replaceChildren();
   table.hidden = sorted.length === 0;
   emptyState.hidden = sorted.length > 0;
+  countLabel.textContent = `${sorted.length} / ${opportunities.length} ürün gösteriliyor`;
+
+  if (opportunities.length > 0 && sorted.length === 0) {
+    emptyState.textContent = 'Filtrelerle eşleşen fırsat bulunamadı.';
+  } else if (opportunities.length === 0) {
+    emptyState.textContent = 'Henüz kayıtlı fırsat yok. Hesaplayıcıdan ilk ürünü kaydet veya CSV/JSON içe aktar.';
+  }
 
   sorted.forEach(item => {
     const tr = document.createElement('tr');
@@ -117,6 +137,57 @@ async function handleSave() {
   }
 }
 
+function importedInputs(item) {
+  const defaults = categoryDefaults[item.category] || categoryDefaults.general;
+  const inputs = {
+    ...defaults,
+    purchasePrice: item.purchasePrice,
+    salePrice: item.salePrice,
+    targetRoi: item.targetRoi ?? 25,
+    other: item.other ?? 0
+  };
+
+  ['commissionRate','advertisingRate','returnReserveRate','shipping','packaging'].forEach(key => {
+    if (item[key] !== undefined) inputs[key] = item[key];
+  });
+  return inputs;
+}
+
+async function handleImport() {
+  const file = fileInput.files?.[0];
+  if (!file) {
+    importStatus.textContent = 'Önce bir CSV veya JSON dosyası seç.';
+    return;
+  }
+
+  importButton.disabled = true;
+  try {
+    const parsed = parseOpportunityImport(await file.text(), file.name);
+    if (!parsed.items.length) {
+      importStatus.textContent = parsed.errors[0] || 'İçe aktarılabilecek geçerli kayıt bulunamadı.';
+      return;
+    }
+
+    const records = parsed.items.map(item => buildOpportunity({
+      name: item.name,
+      category: item.category,
+      inputs: importedInputs(item)
+    }));
+    await saveOpportunities(records);
+    await refreshOpportunities();
+
+    const skipped = parsed.errors.length;
+    const errorPreview = skipped ? ` Atlanan: ${parsed.errors.slice(0, 2).join(' | ')}${skipped > 2 ? ' …' : ''}` : '';
+    importStatus.textContent = `${records.length} ürün içe aktarıldı.${skipped ? ` ${skipped} kayıt atlandı.` : ''}${errorPreview}`;
+    fileInput.value = '';
+  } catch (error) {
+    console.error(error);
+    importStatus.textContent = 'Dosya içe aktarılamadı. Dosya biçimini ve tarayıcı depolamasını kontrol et.';
+  } finally {
+    importButton.disabled = false;
+  }
+}
+
 function loadOpportunity(item) {
   productName.value = item.name;
   category.value = item.category;
@@ -138,7 +209,9 @@ category.addEventListener('change', (event) => {
 });
 
 saveButton.addEventListener('click', handleSave);
-sortSelect.addEventListener('change', renderOpportunities);
+importButton.addEventListener('click', handleImport);
+[sortSelect, statusSelect].forEach(element => element.addEventListener('change', renderOpportunities));
+[searchInput, minRoiInput].forEach(element => element.addEventListener('input', renderOpportunities));
 
 rows.addEventListener('click', async (event) => {
   const button = event.target.closest('button[data-action]');
