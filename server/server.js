@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   ATTRIBUTE_CACHE_TTL_MS,
   CACHE_TTL_MS,
+  categoryChildren,
   getCategoryAttributeCache,
   getCategoryCache,
   hasCredentials,
@@ -62,7 +63,7 @@ function json(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-async function categoryPayload(force = false) {
+async function categoryLevelPayload(parentId = null, force = false) {
   const cache = await getCategoryCache(trendyolConfig, { force, ttlMs: CACHE_TTL_MS });
   return {
     configured: hasCredentials(trendyolConfig),
@@ -71,7 +72,8 @@ async function categoryPayload(force = false) {
     refreshed: Boolean(cache.refreshed),
     refreshError: cache.refreshError || null,
     stats: cache.stats,
-    categories: cache.categories
+    parentId,
+    nodes: categoryChildren(cache.categories, parentId)
   };
 }
 
@@ -97,7 +99,7 @@ async function attributePayload(categoryId, force = false) {
 async function handleApi(req, res, url) {
   if (url.pathname === '/api/trendyol/categories' && req.method === 'GET') {
     try {
-      json(res, 200, await categoryPayload(false));
+      json(res, 200, await categoryLevelPayload(null, false));
     } catch (error) {
       json(res, 503, {
         configured: hasCredentials(trendyolConfig),
@@ -117,9 +119,23 @@ async function handleApi(req, res, url) {
       return true;
     }
     try {
-      json(res, 200, await categoryPayload(true));
+      json(res, 200, await categoryLevelPayload(null, true));
     } catch (error) {
       json(res, 502, { configured: true, error: error.message });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/trendyol/categories/children' && req.method === 'GET') {
+    const parentId = Number(url.searchParams.get('parentId'));
+    if (!Number.isInteger(parentId) || parentId <= 0) {
+      json(res, 400, { error: 'A valid parentId query parameter is required.' });
+      return true;
+    }
+    try {
+      json(res, 200, await categoryLevelPayload(parentId, false));
+    } catch (error) {
+      json(res, 503, { configured: hasCredentials(trendyolConfig), parentId, error: error.message });
     }
     return true;
   }
