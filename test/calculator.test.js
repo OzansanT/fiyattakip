@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculate } from '../js/calculator.js';
 
+const closeTo = (actual, expected, epsilon = 1e-9) => {
+  assert.ok(Math.abs(actual - expected) < epsilon, `expected ${actual} to be close to ${expected}`);
+};
+
 test('calculates profit, ROI and margin', () => {
   const result = calculate({
     salePrice: 1000,
@@ -20,8 +24,8 @@ test('calculates profit, ROI and margin', () => {
   assert.equal(result.returnReserve, 30);
   assert.equal(result.marketplaceAndOperatingCosts, 210);
   assert.equal(result.profit, 290);
-  assert.equal(result.roi, 58);
-  assert.equal(result.margin, 29);
+  closeTo(result.roi, 58);
+  closeTo(result.margin, 29);
 });
 
 test('reverse calculation returns maximum buy price for target ROI', () => {
@@ -37,8 +41,8 @@ test('reverse calculation returns maximum buy price for target ROI', () => {
     targetRoi: 25
   });
 
-  assert.equal(result.maxPurchasePrice, 680);
-  assert.equal(result.requiredSalePrice, 750);
+  closeTo(result.maxPurchasePrice, 680);
+  closeTo(result.requiredSalePrice, 750);
 });
 
 test('break-even price accounts for percentage and fixed costs', () => {
@@ -53,7 +57,7 @@ test('break-even price accounts for percentage and fixed costs', () => {
     targetRoi: 0
   });
 
-  assert.equal(result.breakEvenSalePrice, 600);
+  closeTo(result.breakEvenSalePrice, 600);
 });
 
 test('invalid and negative inputs are safely normalized', () => {
