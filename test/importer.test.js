@@ -7,6 +7,8 @@ test('parseLocalizedNumber supports Turkish and international price formats', ()
   assert.equal(parseLocalizedNumber('1,250.50'), 1250.5);
   assert.equal(parseLocalizedNumber('499,90'), 499.9);
   assert.equal(parseLocalizedNumber(125), 125);
+  assert.equal(Number.isNaN(parseLocalizedNumber('nope')), true);
+  assert.equal(Number.isNaN(parseLocalizedNumber('₺')), true);
 });
 
 test('imports comma-delimited CSV with quoted product names', () => {
