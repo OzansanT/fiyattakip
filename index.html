@@ -12,16 +12,37 @@
       <div>
         <p class="eyebrow">FiyatTakip MVP</p>
         <h1>Ürün almaya değer mi?</h1>
-        <p>Trendyol benzeri pazaryeri maliyetlerini hesaba kat, net kârı ve maksimum alış fiyatını anında gör.</p>
+        <p>Trendyol kategori ağacını güncel tut, ürünleri doğru yaprak kategoriye indir ve pazaryeri maliyetlerini hesaba kat.</p>
       </div>
       <div id="decision" class="decision bad">HESAPLANIYOR</div>
     </header>
+
+    <section class="panel category-sync-panel">
+      <div class="category-sync-header">
+        <div>
+          <p class="eyebrow">Trendyol kategori senkronizasyonu</p>
+          <h2>Kategorileri adım adım seç</h2>
+          <p class="hint">Kategori ağacı sunucu tarafından güvenli şekilde alınır ve 24 saat önbellekte tutulur. Alt seviyeler ağacın yerel kopyasından açılır.</p>
+        </div>
+        <button id="refreshTrendyolCategories" class="secondary-action" type="button">Şimdi Yenile</button>
+      </div>
+      <div class="category-sync-meta">
+        <span id="trendyolCategoryStatus" class="sync-badge">Kategori verisi yükleniyor…</span>
+        <span id="trendyolCategoryStats" class="hint">—</span>
+      </div>
+      <div id="trendyolCategoryLevels" class="category-levels" aria-label="Trendyol kategori seviyeleri"></div>
+      <div class="selected-category-card">
+        <span>Seçilen Trendyol kategorisi</span>
+        <strong id="trendyolCategoryPath">Henüz kategori seçilmedi</strong>
+        <small id="trendyolCategoryId">En alt seviyeye kadar ilerle.</small>
+      </div>
+    </section>
 
     <section class="grid">
       <form id="calculator-form" class="panel controls">
         <h2>Ürün ve fiyatlar</h2>
         <label>Ürün adı<input id="productName" value="Örnek Ürün"></label>
-        <label>Kategori
+        <label>Maliyet profili
           <select id="category">
             <option value="general">Genel</option>
             <option value="electronics">Elektronik</option>
@@ -29,6 +50,7 @@
             <option value="fashion">Moda</option>
           </select>
         </label>
+        <p class="hint">Maliyet profili şimdilik Trendyol kategori kimliğinden ayrıdır; örnek komisyon varsayımlarını temsil eder.</p>
         <div class="two-col">
           <label>Alış fiyatı (₺)<input id="purchasePrice" type="number" min="0" step="0.01" value="480"></label>
           <label>Satış fiyatı (₺)<input id="salePrice" type="number" min="0" step="0.01" value="899"></label>
