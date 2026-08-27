@@ -9,6 +9,8 @@ export const DEFAULT_ATTRIBUTE_CACHE_DIR = path.resolve('server/cache/category-a
 
 const categoryRefreshes = new Map();
 const attributeRefreshes = new Map();
+const jsonCacheMemory = new Map();
+const categoryIndexMemory = new WeakMap();
 
 export function hasCredentials(config = {}) {
   return Boolean(config.sellerId && config.apiKey && config.apiSecret);
@@ -44,6 +46,40 @@ export function countCategoryTree(categories = []) {
   return { total, leaves, maxDepth };
 }
 
+function buildCategoryIndex(categories = []) {
+  if (categoryIndexMemory.has(categories)) return categoryIndexMemory.get(categories);
+  const index = new Map();
+
+  function visit(nodes, parentId = null) {
+    const key = parentId === null ? 'root' : String(parentId);
+    const compact = [];
+    for (const node of nodes || []) {
+      const children = Array.isArray(node.subCategories) ? node.subCategories : [];
+      const entry = {
+        id: Number(node.id),
+        name: String(node.name || ''),
+        parentId,
+        hasChildren: children.length > 0
+      };
+      compact.push(entry);
+      if (children.length) visit(children, entry.id);
+    }
+    index.set(key, compact);
+  }
+
+  visit(categories);
+  categoryIndexMemory.set(categories, index);
+  return index;
+}
+
+export function categoryChildren(categories = [], parentId = null) {
+  const key = parentId === null || parentId === undefined || parentId === ''
+    ? 'root'
+    : String(Number(parentId));
+  if (key !== 'root' && !Number.isFinite(Number(parentId))) return [];
+  return [...(buildCategoryIndex(categories).get(key) || [])];
+}
+
 export function cacheIsFresh(cache, now = Date.now(), ttlMs = CACHE_TTL_MS) {
   if (!cache?.fetchedAt) return false;
   const fetched = Date.parse(cache.fetchedAt);
@@ -51,8 +87,11 @@ export function cacheIsFresh(cache, now = Date.now(), ttlMs = CACHE_TTL_MS) {
 }
 
 async function readJsonCache(cachePath) {
+  if (jsonCacheMemory.has(cachePath)) return jsonCacheMemory.get(cachePath);
   try {
-    return JSON.parse(await readFile(cachePath, 'utf8'));
+    const parsed = JSON.parse(await readFile(cachePath, 'utf8'));
+    jsonCacheMemory.set(cachePath, parsed);
+    return parsed;
   } catch (error) {
     if (error?.code === 'ENOENT') return null;
     throw error;
@@ -62,6 +101,7 @@ async function readJsonCache(cachePath) {
 async function writeJsonCache(cache, cachePath) {
   await mkdir(path.dirname(cachePath), { recursive: true });
   await writeFile(cachePath, `${JSON.stringify(cache, null, 2)}\n`, 'utf8');
+  jsonCacheMemory.set(cachePath, cache);
   return cache;
 }
 
