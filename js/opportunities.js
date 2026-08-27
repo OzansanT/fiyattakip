@@ -21,7 +21,8 @@ export function buildOpportunity({ name, category, inputs, id, createdAt } = {})
 
 export function filterOpportunities(items, filters = {}) {
   const query = String(filters.query || '').trim().toLocaleLowerCase('tr-TR');
-  const minRoi = Number(filters.minRoi);
+  const minRoiRaw = String(filters.minRoi ?? '').trim();
+  const minRoi = minRoiRaw === '' ? NaN : Number(minRoiRaw);
   const status = String(filters.status || 'all');
 
   return [...items].filter(item => {
