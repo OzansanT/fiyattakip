@@ -1,3 +1,4 @@
 .env
 server/cache/*.json
+server/cache/category-attributes/*.json
 !server/cache/.gitkeep
