@@ -1,12 +1,31 @@
 import { calculate } from './calculator.js';
 
-export function buildOpportunity({ name, category, inputs, id, createdAt } = {}) {
+function normalizeTrendyolCategory(value) {
+  if (!value) return null;
+  const id = Number(value.id);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const pathIds = Array.isArray(value.pathIds)
+    ? value.pathIds.map(Number).filter(Number.isFinite)
+    : [];
+  const pathNames = Array.isArray(value.pathNames)
+    ? value.pathNames.map(name => String(name))
+    : [];
+  return {
+    id,
+    name: String(value.name || pathNames.at(-1) || `Kategori ${id}`),
+    pathIds,
+    pathNames
+  };
+}
+
+export function buildOpportunity({ name, category, inputs, trendyolCategory, id, createdAt } = {}) {
   const result = calculate(inputs || {});
   return {
     id,
     createdAt,
     name: String(name || 'Adsız Ürün').trim() || 'Adsız Ürün',
     category: category || 'general',
+    trendyolCategory: normalizeTrendyolCategory(trendyolCategory),
     inputs: { ...inputs },
     purchasePrice: result.purchasePrice,
     salePrice: result.salePrice,
@@ -27,7 +46,10 @@ export function filterOpportunities(items, filters = {}) {
 
   return [...items].filter(item => {
     if (query) {
-      const haystack = `${item.name || ''} ${item.category || ''}`.toLocaleLowerCase('tr-TR');
+      const trendyolPath = Array.isArray(item.trendyolCategory?.pathNames)
+        ? item.trendyolCategory.pathNames.join(' ')
+        : '';
+      const haystack = `${item.name || ''} ${item.category || ''} ${trendyolPath}`.toLocaleLowerCase('tr-TR');
       if (!haystack.includes(query)) return false;
     }
     if (Number.isFinite(minRoi) && Number(item.roi) < minRoi) return false;
