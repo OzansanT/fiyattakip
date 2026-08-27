@@ -44,7 +44,8 @@
           <label>Paketleme (₺)<input id="packaging" type="number" min="0" step="0.01" value="8"></label>
         </div>
         <label>Diğer giderler (₺)<input id="other" type="number" min="0" step="0.01" value="0"></label>
-        <p class="hint">Alanlar değiştikçe sonuçlar otomatik güncellenir.</p>
+        <button id="saveOpportunity" class="primary-action" type="button">Fırsatı Kaydet</button>
+        <p id="saveStatus" class="hint" aria-live="polite">Alanlar değiştikçe sonuçlar otomatik güncellenir.</p>
       </form>
 
       <section class="results">
@@ -71,6 +72,31 @@
           <p id="purchaseAdvice">—</p>
         </article>
       </section>
+    </section>
+
+    <section class="panel opportunities-panel">
+      <div class="opportunities-header">
+        <div>
+          <p class="eyebrow">Yerel fırsat listesi</p>
+          <h2>Kaydedilen ürünler</h2>
+        </div>
+        <label class="sort-control">Sırala
+          <select id="opportunitySort">
+            <option value="updatedAt">Son güncellenen</option>
+            <option value="roi">En yüksek ROI</option>
+            <option value="profit">En yüksek kâr</option>
+            <option value="safetyMargin">En yüksek güvenlik payı</option>
+            <option value="purchasePrice">En düşük sermaye</option>
+          </select>
+        </label>
+      </div>
+      <div id="opportunityEmpty" class="empty-state">Henüz kayıtlı fırsat yok. Hesaplayıcıdan ilk ürünü kaydet.</div>
+      <div class="table-wrap">
+        <table id="opportunityTable" hidden>
+          <thead><tr><th>Ürün</th><th>Alış</th><th>Satış</th><th>Kâr</th><th>ROI</th><th>Max alış</th><th>Karar</th><th></th></tr></thead>
+          <tbody id="opportunityRows"></tbody>
+        </table>
+      </div>
     </section>
   </main>
   <script type="module" src="js/app.js"></script>
