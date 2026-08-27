@@ -3,18 +3,16 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  ATTRIBUTE_CACHE_TTL_MS,
   CACHE_TTL_MS,
-  categoryChildren,
-  getCategoryAttributeCache,
+  flattenLeafCategories,
   getCategoryCache,
   hasCredentials,
   readCategoryCache
 } from './trendyol-categories.js';
+import { fetchProductsByCategory, normalizeProductCount } from './trendyol-products.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ENV_PATH = path.join(ROOT, '.env');
-const DAILY_REFRESH_MS = 24 * 60 * 60 * 1000;
 
 async function loadDotEnv() {
   try {
@@ -63,7 +61,7 @@ function json(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-async function categoryLevelPayload(parentId = null, force = false) {
+async function categoryNamesPayload(force = false) {
   const cache = await getCategoryCache(trendyolConfig, { force, ttlMs: CACHE_TTL_MS });
   return {
     configured: hasCredentials(trendyolConfig),
@@ -72,34 +70,14 @@ async function categoryLevelPayload(parentId = null, force = false) {
     refreshed: Boolean(cache.refreshed),
     refreshError: cache.refreshError || null,
     stats: cache.stats,
-    parentId,
-    nodes: categoryChildren(cache.categories, parentId)
-  };
-}
-
-async function attributePayload(categoryId, force = false) {
-  const cache = await getCategoryAttributeCache(categoryId, trendyolConfig, {
-    force,
-    ttlMs: ATTRIBUTE_CACHE_TTL_MS
-  });
-  return {
-    configured: hasCredentials(trendyolConfig),
-    categoryId: cache.categoryId,
-    categoryName: cache.categoryName || null,
-    displayName: cache.displayName || null,
-    fetchedAt: cache.fetchedAt,
-    stale: Boolean(cache.stale),
-    refreshed: Boolean(cache.refreshed),
-    refreshError: cache.refreshError || null,
-    stats: cache.stats,
-    attributes: cache.attributes
+    categories: flattenLeafCategories(cache.categories)
   };
 }
 
 async function handleApi(req, res, url) {
-  if (url.pathname === '/api/trendyol/categories' && req.method === 'GET') {
+  if (url.pathname === '/api/trendyol/category-names' && req.method === 'GET') {
     try {
-      json(res, 200, await categoryLevelPayload(null, false));
+      json(res, 200, await categoryNamesPayload(false));
     } catch (error) {
       json(res, 503, {
         configured: hasCredentials(trendyolConfig),
@@ -110,32 +88,15 @@ async function handleApi(req, res, url) {
     return true;
   }
 
-  if (url.pathname === '/api/trendyol/categories/refresh' && req.method === 'POST') {
+  if (url.pathname === '/api/trendyol/category-names/refresh' && req.method === 'POST') {
     if (!hasCredentials(trendyolConfig)) {
-      json(res, 503, {
-        configured: false,
-        error: 'Trendyol credentials are not configured.'
-      });
+      json(res, 503, { configured: false, error: 'Trendyol credentials are not configured.' });
       return true;
     }
     try {
-      json(res, 200, await categoryLevelPayload(null, true));
+      json(res, 200, await categoryNamesPayload(true));
     } catch (error) {
       json(res, 502, { configured: true, error: error.message });
-    }
-    return true;
-  }
-
-  if (url.pathname === '/api/trendyol/categories/children' && req.method === 'GET') {
-    const parentId = Number(url.searchParams.get('parentId'));
-    if (!Number.isInteger(parentId) || parentId <= 0) {
-      json(res, 400, { error: 'A valid parentId query parameter is required.' });
-      return true;
-    }
-    try {
-      json(res, 200, await categoryLevelPayload(parentId, false));
-    } catch (error) {
-      json(res, 503, { configured: hasCredentials(trendyolConfig), parentId, error: error.message });
     }
     return true;
   }
@@ -152,23 +113,18 @@ async function handleApi(req, res, url) {
     return true;
   }
 
-  const attributeMatch = url.pathname.match(/^\/api\/trendyol\/categories\/(\d+)\/attributes(?:\/(refresh))?$/);
-  if (attributeMatch) {
-    const categoryId = Number(attributeMatch[1]);
-    const force = attributeMatch[2] === 'refresh';
-    const expectedMethod = force ? 'POST' : 'GET';
-    if (req.method !== expectedMethod) {
-      json(res, 405, { error: `Use ${expectedMethod} for this endpoint.` });
-      return true;
-    }
+  const productMatch = url.pathname.match(/^\/api\/trendyol\/categories\/(\d+)\/products$/);
+  if (productMatch && req.method === 'GET') {
+    const categoryId = Number(productMatch[1]);
+    const limit = normalizeProductCount(url.searchParams.get('limit'));
     if (!hasCredentials(trendyolConfig)) {
       json(res, 503, { configured: false, error: 'Trendyol credentials are not configured.' });
       return true;
     }
     try {
-      json(res, 200, await attributePayload(categoryId, force));
+      json(res, 200, await fetchProductsByCategory(categoryId, limit, trendyolConfig));
     } catch (error) {
-      json(res, 502, { configured: true, categoryId, error: error.message });
+      json(res, 502, { configured: true, categoryId, requested: limit, error: error.message });
     }
     return true;
   }
@@ -226,15 +182,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`FiyatTakip running at http://localhost:${PORT}`);
-  console.log(`Trendyol category sync: ${hasCredentials(trendyolConfig) ? 'configured' : 'credentials missing'}`);
+  console.log(`Trendyol bridge: ${hasCredentials(trendyolConfig) ? 'configured' : 'credentials missing'}`);
+  console.log('No Trendyol request is made until you click a fetch/refresh button in the UI.');
 });
-
-if (hasCredentials(trendyolConfig)) {
-  getCategoryCache(trendyolConfig).catch(error => console.error('Initial Trendyol category sync failed:', error.message));
-  const timer = setInterval(() => {
-    getCategoryCache(trendyolConfig, { force: true })
-      .then(cache => console.log(`Trendyol categories refreshed: ${cache.fetchedAt}`))
-      .catch(error => console.error('Scheduled Trendyol category refresh failed:', error.message));
-  }, DAILY_REFRESH_MS);
-  timer.unref();
-}
