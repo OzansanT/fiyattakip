@@ -79,8 +79,30 @@
         <div>
           <p class="eyebrow">Yerel fırsat listesi</p>
           <h2>Kaydedilen ürünler</h2>
+          <p id="opportunityCount" class="hint">0 ürün</p>
         </div>
-        <label class="sort-control">Sırala
+        <div class="bulk-import">
+          <label class="file-control">CSV / JSON içe aktar
+            <input id="opportunityFile" type="file" accept=".csv,.json,text/csv,application/json">
+          </label>
+          <button id="importOpportunities" class="secondary-action" type="button">Dosyayı İçe Aktar</button>
+          <p id="importStatus" class="hint" aria-live="polite">CSV için name, purchasePrice ve salePrice başlıkları yeterlidir.</p>
+        </div>
+      </div>
+
+      <div class="opportunity-filters" aria-label="Fırsat filtreleri">
+        <label>Ürün / kategori ara<input id="opportunitySearch" type="search" placeholder="Örn. mouse veya electronics"></label>
+        <label>Minimum ROI (%)<input id="opportunityMinRoi" type="number" step="1" placeholder="Tümü"></label>
+        <label>Karar
+          <select id="opportunityStatus">
+            <option value="all">Tümü</option>
+            <option value="excellent">Çok iyi</option>
+            <option value="good">Alınabilir</option>
+            <option value="marginal">Sınırda</option>
+            <option value="bad">Alma</option>
+          </select>
+        </label>
+        <label>Sırala
           <select id="opportunitySort">
             <option value="updatedAt">Son güncellenen</option>
             <option value="roi">En yüksek ROI</option>
@@ -90,7 +112,8 @@
           </select>
         </label>
       </div>
-      <div id="opportunityEmpty" class="empty-state">Henüz kayıtlı fırsat yok. Hesaplayıcıdan ilk ürünü kaydet.</div>
+
+      <div id="opportunityEmpty" class="empty-state">Henüz kayıtlı fırsat yok. Hesaplayıcıdan ilk ürünü kaydet veya CSV/JSON içe aktar.</div>
       <div class="table-wrap">
         <table id="opportunityTable" hidden>
           <thead><tr><th>Ürün</th><th>Alış</th><th>Satış</th><th>Kâr</th><th>ROI</th><th>Max alış</th><th>Karar</th><th></th></tr></thead>
