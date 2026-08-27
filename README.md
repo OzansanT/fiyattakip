@@ -15,9 +15,12 @@ FiyatTakip helps answer a sourcing question: **is this product worth buying at t
 - Break-even sale price
 - Purchase/negotiation guidance
 - Profit waterfall
+- Saved sourcing opportunities persisted locally with IndexedDB
+- Opportunity table with reload/delete actions
+- Sorting by ROI, profit, safety margin, capital requirement, or recent update
 - Category rule seed data in JSON
 - Responsive standalone UI
-- Zero-dependency calculator tests
+- Zero-dependency calculation and opportunity-model tests
 
 ## Run
 
@@ -29,6 +32,8 @@ python3 -m http.server 8000
 
 Then open `http://localhost:8000`.
 
+Saved opportunities remain on the current browser/device through IndexedDB. No account or remote database is required.
+
 ## Test
 
 Requires Node.js 20+.
@@ -39,14 +44,16 @@ npm test
 
 ## Architecture
 
-- `index.html` — application shell
+- `index.html` — application shell and opportunity workspace
 - `css/styles.css` — responsive UI styling
 - `js/calculator.js` — pure calculation engine
+- `js/opportunities.js` — saved-opportunity snapshots and sorting rules
+- `js/storage.js` — IndexedDB persistence adapter
 - `js/app.js` — browser bindings and rendering
 - `data/category-rules.json` — seed marketplace/category assumptions
-- `test/calculator.test.js` — formula regression tests
+- `test/` — calculation and opportunity-model regression tests
 
-The calculation engine is intentionally independent from the DOM so future Trendyol, Hepsiburada or other marketplace adapters can feed it without coupling marketplace API code to profitability formulas.
+The calculation engine and opportunity model are intentionally independent from the DOM so future Trendyol, Hepsiburada or other marketplace adapters can feed them without coupling marketplace API code to profitability formulas.
 
 ## Important assumption
 
