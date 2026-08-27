@@ -2,6 +2,14 @@ import { calculate, formatPercent, formatTry } from './calculator.js';
 import { parseOpportunityImport } from './importer.js';
 import { buildOpportunity, filterOpportunities, sortOpportunities } from './opportunities.js';
 import { deleteOpportunity, listOpportunities, saveOpportunity, saveOpportunities } from './storage.js';
+import {
+  categoryLevels,
+  isLeafCategory,
+  loadTrendyolCategories,
+  refreshTrendyolCategories,
+  selectedCategory,
+  selectedCategoryPath
+} from './trendyol-categories.js';
 
 const ids = [
   'purchasePrice','salePrice','commissionRate','advertisingRate','returnReserveRate',
@@ -30,6 +38,13 @@ const table = document.getElementById('opportunityTable');
 const rows = document.getElementById('opportunityRows');
 const emptyState = document.getElementById('opportunityEmpty');
 
+const trendyolRefreshButton = document.getElementById('refreshTrendyolCategories');
+const trendyolStatus = document.getElementById('trendyolCategoryStatus');
+const trendyolStats = document.getElementById('trendyolCategoryStats');
+const trendyolLevels = document.getElementById('trendyolCategoryLevels');
+const trendyolPath = document.getElementById('trendyolCategoryPath');
+const trendyolId = document.getElementById('trendyolCategoryId');
+
 const categoryDefaults = {
   general: { commissionRate: 18, advertisingRate: 2, returnReserveRate: 3, shipping: 69.9, packaging: 8 },
   electronics: { commissionRate: 12, advertisingRate: 2, returnReserveRate: 4, shipping: 69.9, packaging: 10 },
@@ -38,6 +53,25 @@ const categoryDefaults = {
 };
 
 let opportunities = [];
+let trendyolCategories = [];
+let selectedTrendyolIds = loadSavedTrendyolPath();
+
+function loadSavedTrendyolPath() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem('fiyattakip.trendyolCategoryPath') || '[]');
+    return Array.isArray(parsed) ? parsed.map(Number).filter(Number.isFinite) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveTrendyolPath() {
+  try {
+    localStorage.setItem('fiyattakip.trendyolCategoryPath', JSON.stringify(selectedTrendyolIds));
+  } catch {
+    // Category browsing still works when localStorage is unavailable.
+  }
+}
 
 function readInput() {
   return Object.fromEntries(ids.map(id => [id, els[id].value]));
@@ -70,6 +104,98 @@ function render() {
     const discount = Math.abs(r.safetyMargin);
     const discountPct = r.purchasePrice > 0 ? (discount / r.purchasePrice) * 100 : 0;
     out.purchaseAdvice.textContent = `Hedef ROI için alış fiyatını en az ${formatTry(discount)} (${formatPercent(discountPct)}) düşür; ${formatTry(r.maxPurchasePrice)} veya altını hedefle.`;
+  }
+}
+
+function renderTrendyolSelection() {
+  const current = selectedCategory(trendyolCategories, selectedTrendyolIds);
+  const names = selectedCategoryPath(trendyolCategories, selectedTrendyolIds);
+
+  trendyolPath.textContent = names.length ? names.join(' → ') : 'Henüz kategori seçilmedi';
+  if (!current) {
+    trendyolId.textContent = 'En alt seviyeye kadar ilerle.';
+    return;
+  }
+
+  if (isLeafCategory(current)) {
+    trendyolId.textContent = `Yaprak kategori ID: ${current.id} — ürün eşleştirmesi için kullanılabilir.`;
+  } else {
+    trendyolId.textContent = `Kategori ID: ${current.id} — ${current.subCategories.length} alt kategori var; bir alt seviyeye devam et.`;
+  }
+}
+
+function renderTrendyolLevels() {
+  trendyolLevels.replaceChildren();
+  const levels = categoryLevels(trendyolCategories, selectedTrendyolIds);
+
+  levels.forEach((nodes, levelIndex) => {
+    const label = document.createElement('label');
+    label.className = 'category-level';
+    const title = document.createElement('span');
+    title.textContent = `Seviye ${levelIndex + 1}`;
+    const select = document.createElement('select');
+    select.dataset.level = String(levelIndex);
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Kategori seç';
+    select.appendChild(placeholder);
+
+    [...nodes]
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'tr'))
+      .forEach(node => {
+        const option = document.createElement('option');
+        option.value = String(node.id);
+        option.textContent = node.name;
+        select.appendChild(option);
+      });
+
+    if (selectedTrendyolIds[levelIndex] !== undefined) {
+      select.value = String(selectedTrendyolIds[levelIndex]);
+    }
+    label.append(title, select);
+    trendyolLevels.appendChild(label);
+  });
+
+  renderTrendyolSelection();
+}
+
+function updateTrendyolMeta(payload) {
+  const fetched = payload.fetchedAt ? new Date(payload.fetchedAt).toLocaleString('tr-TR') : 'bilinmiyor';
+  trendyolStatus.className = `sync-badge ${payload.stale ? 'stale' : 'fresh'}`;
+  trendyolStatus.textContent = payload.stale
+    ? `Önbellek eski — son başarılı: ${fetched}`
+    : `Güncel — ${fetched}`;
+
+  const stats = payload.stats || {};
+  const pieces = [];
+  if (Number.isFinite(stats.total)) pieces.push(`${stats.total} kategori`);
+  if (Number.isFinite(stats.leaves)) pieces.push(`${stats.leaves} yaprak`);
+  if (Number.isFinite(stats.maxDepth)) pieces.push(`${stats.maxDepth} seviye`);
+  if (payload.refreshed) pieces.push('Trendyol’dan yenilendi');
+  if (payload.refreshError) pieces.push(`yenileme hatası: ${payload.refreshError}`);
+  trendyolStats.textContent = pieces.join(' · ') || 'Kategori ağacı hazır.';
+}
+
+async function syncTrendyolCategories(force = false) {
+  trendyolRefreshButton.disabled = true;
+  trendyolStatus.className = 'sync-badge';
+  trendyolStatus.textContent = force ? 'Trendyol’dan yenileniyor…' : 'Kategori verisi kontrol ediliyor…';
+
+  try {
+    const payload = force
+      ? await refreshTrendyolCategories()
+      : await loadTrendyolCategories();
+    trendyolCategories = payload.categories;
+    updateTrendyolMeta(payload);
+    renderTrendyolLevels();
+  } catch (error) {
+    console.error(error);
+    trendyolStatus.className = 'sync-badge error';
+    trendyolStatus.textContent = 'Kategori bağlantısı kurulamadı';
+    trendyolStats.textContent = `${error.message} Uygulamayı npm start ile çalıştır ve .env dosyasını yapılandır.`;
+  } finally {
+    trendyolRefreshButton.disabled = false;
   }
 }
 
@@ -208,6 +334,17 @@ category.addEventListener('change', (event) => {
   render();
 });
 
+trendyolLevels.addEventListener('change', event => {
+  const select = event.target.closest('select[data-level]');
+  if (!select) return;
+  const level = Number(select.dataset.level);
+  selectedTrendyolIds = selectedTrendyolIds.slice(0, level);
+  if (select.value) selectedTrendyolIds.push(Number(select.value));
+  saveTrendyolPath();
+  renderTrendyolLevels();
+});
+
+trendyolRefreshButton.addEventListener('click', () => syncTrendyolCategories(true));
 saveButton.addEventListener('click', handleSave);
 importButton.addEventListener('click', handleImport);
 [sortSelect, statusSelect].forEach(element => element.addEventListener('change', renderOpportunities));
@@ -240,6 +377,7 @@ rows.addEventListener('click', async (event) => {
 });
 
 render();
+syncTrendyolCategories(false);
 refreshOpportunities().catch(error => {
   console.error(error);
   emptyState.textContent = 'Tarayıcı yerel veritabanı kullanılamıyor.';
