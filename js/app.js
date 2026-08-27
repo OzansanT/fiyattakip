@@ -3,12 +3,11 @@ import { parseOpportunityImport } from './importer.js';
 import { buildOpportunity, filterOpportunities, sortOpportunities } from './opportunities.js';
 import { deleteOpportunity, listOpportunities, saveOpportunity, saveOpportunities } from './storage.js';
 import {
-  categoryLevels,
-  isLeafCategory,
   loadTrendyolCategories,
+  loadTrendyolCategoryAttributes,
+  loadTrendyolCategoryChildren,
   refreshTrendyolCategories,
-  selectedCategory,
-  selectedCategoryPath
+  refreshTrendyolCategoryAttributes
 } from './trendyol-categories.js';
 
 const ids = [
@@ -44,6 +43,12 @@ const trendyolStats = document.getElementById('trendyolCategoryStats');
 const trendyolLevels = document.getElementById('trendyolCategoryLevels');
 const trendyolPath = document.getElementById('trendyolCategoryPath');
 const trendyolId = document.getElementById('trendyolCategoryId');
+const attributeLoadButton = document.getElementById('loadTrendyolAttributes');
+const attributeRefreshButton = document.getElementById('refreshTrendyolAttributes');
+const attributeTitle = document.getElementById('trendyolAttributeTitle');
+const attributeStatus = document.getElementById('trendyolAttributeStatus');
+const attributeSummary = document.getElementById('trendyolAttributeSummary');
+const attributeList = document.getElementById('trendyolAttributeList');
 
 const categoryDefaults = {
   general: { commissionRate: 18, advertisingRate: 2, returnReserveRate: 3, shipping: 69.9, packaging: 8 },
@@ -53,8 +58,12 @@ const categoryDefaults = {
 };
 
 let opportunities = [];
-let trendyolCategories = [];
+let trendyolLevelNodes = [];
 let selectedTrendyolIds = loadSavedTrendyolPath();
+let selectedTrendyolNodes = [];
+let categoryNavigationVersion = 0;
+const childLevelMemory = new Map();
+const attributeMemory = new Map();
 
 function loadSavedTrendyolPath() {
   try {
@@ -107,28 +116,104 @@ function render() {
   }
 }
 
-function renderTrendyolSelection() {
-  const current = selectedCategory(trendyolCategories, selectedTrendyolIds);
-  const names = selectedCategoryPath(trendyolCategories, selectedTrendyolIds);
+function currentTrendyolNode() {
+  return selectedTrendyolNodes.at(-1) || null;
+}
 
-  trendyolPath.textContent = names.length ? names.join(' → ') : 'Henüz kategori seçilmedi';
-  if (!current) {
-    trendyolId.textContent = 'En alt seviyeye kadar ilerle.';
+function currentTrendyolLeaf() {
+  const node = currentTrendyolNode();
+  return node && node.hasChildren === false ? node : null;
+}
+
+function selectedTrendyolSnapshot() {
+  const leaf = currentTrendyolLeaf();
+  if (!leaf) return null;
+  return {
+    id: Number(leaf.id),
+    name: leaf.name,
+    pathIds: [...selectedTrendyolIds],
+    pathNames: selectedTrendyolNodes.map(node => node.name)
+  };
+}
+
+function attributeName(item) {
+  return item?.attribute?.name || item?.name || `Özellik ${item?.attribute?.id || item?.id || ''}`.trim();
+}
+
+function renderAttributePayload(payload) {
+  attributeList.replaceChildren();
+  const attributes = Array.isArray(payload?.attributes) ? payload.attributes : [];
+  const fetched = payload?.fetchedAt ? new Date(payload.fetchedAt).toLocaleString('tr-TR') : 'bilinmiyor';
+  const required = Number(payload?.stats?.required) || attributes.filter(item => item?.required === true).length;
+  const visible = attributes.slice(0, 120);
+  const hiddenNote = attributes.length > visible.length ? ` · ilk ${visible.length} gösteriliyor` : '';
+  attributeSummary.textContent = `${attributes.length} özellik · ${required} zorunlu · son alınan: ${fetched}${payload?.stale ? ' · önbellek eski' : ''}${hiddenNote}`;
+  attributeStatus.textContent = payload?.refreshError
+    ? `Eski önbellek kullanılıyor: ${payload.refreshError}`
+    : payload?.refreshed
+      ? 'Bu yaprak kategori Trendyol’dan yenilendi.'
+      : 'Bu yaprak kategori yerel özellik önbelleğinden yüklendi.';
+
+  for (const item of visible) {
+    const row = document.createElement('div');
+    row.className = 'attribute-item';
+    const name = document.createElement('strong');
+    name.textContent = attributeName(item);
+    const meta = document.createElement('span');
+    const flags = [];
+    if (item?.required === true) flags.push('zorunlu');
+    if (item?.allowCustom === true) flags.push('özel değer');
+    if (item?.allowMultipleAttributeValues === true) flags.push('çoklu değer');
+    meta.textContent = flags.join(' · ') || 'opsiyonel';
+    row.append(name, meta);
+    attributeList.appendChild(row);
+  }
+}
+
+function renderTrendyolAttributePanel() {
+  const leaf = currentTrendyolLeaf();
+  if (!leaf) {
+    attributeLoadButton.disabled = true;
+    attributeRefreshButton.disabled = true;
+    attributeTitle.textContent = 'Önce yaprak kategori seç';
+    attributeStatus.textContent = 'Özellikler toplu indirilmez; yalnızca seçtiğin yaprak kategori için istek yapılır.';
+    attributeSummary.textContent = 'Henüz özellik isteği yapılmadı.';
+    attributeList.replaceChildren();
     return;
   }
 
-  if (isLeafCategory(current)) {
-    trendyolId.textContent = `Yaprak kategori ID: ${current.id} — ürün eşleştirmesi için kullanılabilir.`;
+  attributeLoadButton.disabled = false;
+  attributeRefreshButton.disabled = false;
+  attributeTitle.textContent = `${leaf.name} · ID ${leaf.id}`;
+  const cached = attributeMemory.get(Number(leaf.id));
+  if (cached) {
+    renderAttributePayload(cached);
   } else {
-    trendyolId.textContent = `Kategori ID: ${current.id} — ${current.subCategories.length} alt kategori var; bir alt seviyeye devam et.`;
+    attributeStatus.textContent = 'Hazır. İstek yalnızca bu yaprak kategori için yapılacak.';
+    attributeSummary.textContent = 'Özellikleri görmek için “Özellikleri Yükle”ye bas.';
+    attributeList.replaceChildren();
   }
+}
+
+function renderTrendyolSelection() {
+  const current = currentTrendyolNode();
+  const names = selectedTrendyolNodes.map(node => node.name);
+  trendyolPath.textContent = names.length ? names.join(' → ') : 'Henüz kategori seçilmedi';
+
+  if (!current) {
+    trendyolId.textContent = 'En alt seviyeye kadar ilerle.';
+  } else if (current.hasChildren === false) {
+    trendyolId.textContent = `Yaprak kategori ID: ${current.id} — kaydedilen fırsata eklenecek.`;
+  } else {
+    trendyolId.textContent = `Kategori ID: ${current.id} — alt kategoriler yerel önbellekten seviye seviye açılır.`;
+  }
+  renderTrendyolAttributePanel();
 }
 
 function renderTrendyolLevels() {
   trendyolLevels.replaceChildren();
-  const levels = categoryLevels(trendyolCategories, selectedTrendyolIds);
 
-  levels.forEach((nodes, levelIndex) => {
+  trendyolLevelNodes.forEach((nodes, levelIndex) => {
     const label = document.createElement('label');
     label.className = 'category-level';
     const title = document.createElement('span');
@@ -174,21 +259,62 @@ function updateTrendyolMeta(payload) {
   if (Number.isFinite(stats.maxDepth)) pieces.push(`${stats.maxDepth} seviye`);
   if (payload.refreshed) pieces.push('Trendyol’dan yenilendi');
   if (payload.refreshError) pieces.push(`yenileme hatası: ${payload.refreshError}`);
-  trendyolStats.textContent = pieces.join(' · ') || 'Kategori ağacı hazır.';
+  pieces.push('tarayıcıya yalnızca açık seviye gönderilir');
+  trendyolStats.textContent = pieces.join(' · ');
+}
+
+async function getChildLevel(parentId) {
+  const id = Number(parentId);
+  if (childLevelMemory.has(id)) return childLevelMemory.get(id);
+  const payload = await loadTrendyolCategoryChildren(id);
+  childLevelMemory.set(id, payload.nodes);
+  return payload.nodes;
+}
+
+async function restoreTrendyolPath(pathIds, rootNodes = trendyolLevelNodes[0] || []) {
+  const version = ++categoryNavigationVersion;
+  const wanted = Array.isArray(pathIds) ? pathIds.map(Number).filter(Number.isFinite) : [];
+  trendyolLevelNodes = [rootNodes];
+  selectedTrendyolIds = [];
+  selectedTrendyolNodes = [];
+
+  for (let depth = 0; depth < wanted.length; depth += 1) {
+    const nodes = trendyolLevelNodes[depth] || [];
+    const node = nodes.find(item => Number(item.id) === wanted[depth]);
+    if (!node) break;
+    selectedTrendyolIds.push(Number(node.id));
+    selectedTrendyolNodes.push(node);
+    if (!node.hasChildren) break;
+
+    try {
+      const children = await getChildLevel(node.id);
+      if (version !== categoryNavigationVersion) return;
+      trendyolLevelNodes.push(children);
+    } catch (error) {
+      if (version !== categoryNavigationVersion) return;
+      console.error(error);
+      trendyolStats.textContent = `Alt kategori seviyesi yüklenemedi: ${error.message}`;
+      break;
+    }
+  }
+
+  saveTrendyolPath();
+  renderTrendyolLevels();
 }
 
 async function syncTrendyolCategories(force = false) {
   trendyolRefreshButton.disabled = true;
   trendyolStatus.className = 'sync-badge';
   trendyolStatus.textContent = force ? 'Trendyol’dan yenileniyor…' : 'Kategori verisi kontrol ediliyor…';
+  const previousPath = [...selectedTrendyolIds];
 
   try {
     const payload = force
       ? await refreshTrendyolCategories()
       : await loadTrendyolCategories();
-    trendyolCategories = payload.categories;
+    if (force || payload.refreshed) childLevelMemory.clear();
     updateTrendyolMeta(payload);
-    renderTrendyolLevels();
+    await restoreTrendyolPath(previousPath, payload.nodes);
   } catch (error) {
     console.error(error);
     trendyolStatus.className = 'sync-badge error';
@@ -196,6 +322,69 @@ async function syncTrendyolCategories(force = false) {
     trendyolStats.textContent = `${error.message} Uygulamayı npm start ile çalıştır ve .env dosyasını yapılandır.`;
   } finally {
     trendyolRefreshButton.disabled = false;
+  }
+}
+
+async function handleTrendyolLevelChange(select) {
+  const level = Number(select.dataset.level);
+  const version = ++categoryNavigationVersion;
+  trendyolLevelNodes = trendyolLevelNodes.slice(0, level + 1);
+  selectedTrendyolIds = selectedTrendyolIds.slice(0, level);
+  selectedTrendyolNodes = selectedTrendyolNodes.slice(0, level);
+
+  if (!select.value) {
+    saveTrendyolPath();
+    renderTrendyolLevels();
+    return;
+  }
+
+  const node = trendyolLevelNodes[level]?.find(item => Number(item.id) === Number(select.value));
+  if (!node) return;
+  selectedTrendyolIds.push(Number(node.id));
+  selectedTrendyolNodes.push(node);
+  saveTrendyolPath();
+  renderTrendyolLevels();
+
+  if (!node.hasChildren) return;
+  trendyolStats.textContent = 'Bir sonraki kategori seviyesi yerel önbellekten yükleniyor…';
+  try {
+    const children = await getChildLevel(node.id);
+    if (version !== categoryNavigationVersion) return;
+    trendyolLevelNodes.push(children);
+    renderTrendyolLevels();
+  } catch (error) {
+    if (version !== categoryNavigationVersion) return;
+    console.error(error);
+    trendyolStats.textContent = `Alt kategori seviyesi yüklenemedi: ${error.message}`;
+  }
+}
+
+async function syncTrendyolAttributes(force = false) {
+  const leaf = currentTrendyolLeaf();
+  if (!leaf) return;
+  const categoryId = Number(leaf.id);
+  attributeLoadButton.disabled = true;
+  attributeRefreshButton.disabled = true;
+  attributeStatus.textContent = force ? 'Bu yaprak kategorinin özellikleri yenileniyor…' : 'Bu yaprak kategorinin özellikleri yükleniyor…';
+  attributeSummary.textContent = 'Yalnızca seçili kategori için istek yapılıyor.';
+
+  try {
+    const payload = force
+      ? await refreshTrendyolCategoryAttributes(categoryId)
+      : await loadTrendyolCategoryAttributes(categoryId);
+    if (Number(currentTrendyolLeaf()?.id) !== categoryId) return;
+    attributeMemory.set(categoryId, payload);
+    renderAttributePayload(payload);
+  } catch (error) {
+    console.error(error);
+    if (Number(currentTrendyolLeaf()?.id) !== categoryId) return;
+    attributeStatus.textContent = 'Kategori özellikleri yüklenemedi.';
+    attributeSummary.textContent = error.message;
+  } finally {
+    if (Number(currentTrendyolLeaf()?.id) === categoryId) {
+      attributeLoadButton.disabled = false;
+      attributeRefreshButton.disabled = false;
+    }
   }
 }
 
@@ -234,7 +423,10 @@ function renderOpportunities() {
       <td><div class="row-actions"><button type="button" data-action="load">Yükle</button><button type="button" data-action="delete" class="danger">Sil</button></div></td>`;
     tr.dataset.id = item.id;
     tr.querySelector('strong').textContent = item.name;
-    tr.querySelector('small').textContent = item.category;
+    const categoryLabel = item.trendyolCategory?.pathNames?.length
+      ? item.trendyolCategory.pathNames.join(' → ')
+      : item.category;
+    tr.querySelector('small').textContent = categoryLabel;
     rows.appendChild(tr);
   });
 }
@@ -250,10 +442,13 @@ async function handleSave() {
     const opportunity = buildOpportunity({
       name: productName.value,
       category: category.value,
+      trendyolCategory: selectedTrendyolSnapshot(),
       inputs: readInput()
     });
     await saveOpportunity(opportunity);
-    saveStatus.textContent = 'Fırsat cihazında kaydedildi.';
+    saveStatus.textContent = opportunity.trendyolCategory
+      ? `Fırsat cihazında kaydedildi · Trendyol kategori ID ${opportunity.trendyolCategory.id}.`
+      : 'Fırsat cihazında kaydedildi.';
     await refreshOpportunities();
   } catch (error) {
     console.error(error);
@@ -314,12 +509,15 @@ async function handleImport() {
   }
 }
 
-function loadOpportunity(item) {
+async function loadOpportunity(item) {
   productName.value = item.name;
   category.value = item.category;
   Object.entries(item.inputs || {}).forEach(([key, value]) => {
     if (els[key]) els[key].value = value;
   });
+  if (Array.isArray(item.trendyolCategory?.pathIds) && item.trendyolCategory.pathIds.length && trendyolLevelNodes[0]) {
+    await restoreTrendyolPath(item.trendyolCategory.pathIds, trendyolLevelNodes[0]);
+  }
   render();
   saveStatus.textContent = 'Kayıt hesaplayıcıya yüklendi.';
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -337,14 +535,12 @@ category.addEventListener('change', (event) => {
 trendyolLevels.addEventListener('change', event => {
   const select = event.target.closest('select[data-level]');
   if (!select) return;
-  const level = Number(select.dataset.level);
-  selectedTrendyolIds = selectedTrendyolIds.slice(0, level);
-  if (select.value) selectedTrendyolIds.push(Number(select.value));
-  saveTrendyolPath();
-  renderTrendyolLevels();
+  handleTrendyolLevelChange(select);
 });
 
 trendyolRefreshButton.addEventListener('click', () => syncTrendyolCategories(true));
+attributeLoadButton.addEventListener('click', () => syncTrendyolAttributes(false));
+attributeRefreshButton.addEventListener('click', () => syncTrendyolAttributes(true));
 saveButton.addEventListener('click', handleSave);
 importButton.addEventListener('click', handleImport);
 [sortSelect, statusSelect].forEach(element => element.addEventListener('change', renderOpportunities));
@@ -358,7 +554,7 @@ rows.addEventListener('click', async (event) => {
   if (!item) return;
 
   if (button.dataset.action === 'load') {
-    loadOpportunity(item);
+    await loadOpportunity(item);
     return;
   }
 

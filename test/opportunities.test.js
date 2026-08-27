@@ -26,19 +26,40 @@ test('buildOpportunity snapshots calculator inputs and derived metrics', () => {
   assert.deepEqual(item.inputs, sampleInputs);
 });
 
+test('buildOpportunity stores a normalized Trendyol leaf category snapshot', () => {
+  const item = buildOpportunity({
+    name: 'Mouse',
+    inputs: sampleInputs,
+    trendyolCategory: {
+      id: '12',
+      name: 'Mouse',
+      pathIds: [10, 11, '12'],
+      pathNames: ['Elektronik', 'Bilgisayar', 'Mouse']
+    }
+  });
+
+  assert.deepEqual(item.trendyolCategory, {
+    id: 12,
+    name: 'Mouse',
+    pathIds: [10, 11, 12],
+    pathNames: ['Elektronik', 'Bilgisayar', 'Mouse']
+  });
+});
+
 test('buildOpportunity falls back to a safe product name', () => {
   const item = buildOpportunity({ name: '   ', inputs: {} });
   assert.equal(item.name, 'Adsız Ürün');
 });
 
-test('filterOpportunities searches name/category and combines ROI/status filters', () => {
+test('filterOpportunities searches name, profile and Trendyol category path', () => {
   const items = [
-    { id: 'a', name: 'Mouse A', category: 'electronics', roi: 35, status: 'good' },
+    { id: 'a', name: 'Mouse A', category: 'electronics', roi: 35, status: 'good', trendyolCategory: { pathNames: ['Elektronik', 'Bilgisayar', 'Mouse'] } },
     { id: 'b', name: 'Koltuk', category: 'home', roi: 12, status: 'bad' },
     { id: 'c', name: 'Mouse Pad', category: 'electronics', roi: 45, status: 'excellent' }
   ];
 
   assert.deepEqual(filterOpportunities(items, { query: 'mouse' }).map(x => x.id), ['a', 'c']);
+  assert.deepEqual(filterOpportunities(items, { query: 'bilgisayar' }).map(x => x.id), ['a']);
   assert.deepEqual(filterOpportunities(items, { query: 'HOME' }).map(x => x.id), ['b']);
   assert.deepEqual(filterOpportunities(items, { minRoi: 30 }).map(x => x.id), ['a', 'c']);
   assert.deepEqual(filterOpportunities(items, { minRoi: '', status: 'bad' }).map(x => x.id), ['b']);

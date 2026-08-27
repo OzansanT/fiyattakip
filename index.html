@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>FiyatTakip — Kârlılık Analizi</title>
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/trendyol-attributes.css">
 </head>
 <body>
   <main class="app-shell">
@@ -35,6 +36,20 @@
         <span>Seçilen Trendyol kategorisi</span>
         <strong id="trendyolCategoryPath">Henüz kategori seçilmedi</strong>
         <small id="trendyolCategoryId">En alt seviyeye kadar ilerle.</small>
+      </div>
+
+      <div class="category-attributes-card">
+        <div>
+          <span>Yaprak kategori özellikleri</span>
+          <strong id="trendyolAttributeTitle">Önce yaprak kategori seç</strong>
+          <small id="trendyolAttributeStatus">Özellikler toplu indirilmez; yalnızca seçtiğin yaprak kategori için istek yapılır.</small>
+        </div>
+        <div class="attribute-actions">
+          <button id="loadTrendyolAttributes" class="secondary-action" type="button" disabled>Özellikleri Yükle</button>
+          <button id="refreshTrendyolAttributes" class="secondary-action" type="button" disabled>Özellikleri Yenile</button>
+        </div>
+        <p id="trendyolAttributeSummary" class="hint">Henüz özellik isteği yapılmadı.</p>
+        <div id="trendyolAttributeList" class="attribute-list" aria-live="polite"></div>
       </div>
     </section>
 
