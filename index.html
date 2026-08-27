@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FiyatTakip — Kârlılık Analizi</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">FiyatTakip MVP</p>
+        <h1>Ürün almaya değer mi?</h1>
+        <p>Trendyol benzeri pazaryeri maliyetlerini hesaba kat, net kârı ve maksimum alış fiyatını anında gör.</p>
+      </div>
+      <div id="decision" class="decision bad">HESAPLANIYOR</div>
+    </header>
+
+    <section class="grid">
+      <form id="calculator-form" class="panel controls">
+        <h2>Ürün ve fiyatlar</h2>
+        <label>Ürün adı<input id="productName" value="Örnek Ürün"></label>
+        <label>Kategori
+          <select id="category">
+            <option value="general">Genel</option>
+            <option value="electronics">Elektronik</option>
+            <option value="home">Ev & Yaşam</option>
+            <option value="fashion">Moda</option>
+          </select>
+        </label>
+        <div class="two-col">
+          <label>Alış fiyatı (₺)<input id="purchasePrice" type="number" min="0" step="0.01" value="480"></label>
+          <label>Satış fiyatı (₺)<input id="salePrice" type="number" min="0" step="0.01" value="899"></label>
+        </div>
+
+        <h2>Maliyet kuralları</h2>
+        <div class="two-col">
+          <label>Komisyon (%)<input id="commissionRate" type="number" min="0" step="0.1" value="18"></label>
+          <label>Reklam (%)<input id="advertisingRate" type="number" min="0" step="0.1" value="2"></label>
+          <label>İade rezervi (%)<input id="returnReserveRate" type="number" min="0" step="0.1" value="3"></label>
+          <label>Hedef ROI (%)<input id="targetRoi" type="number" min="0" step="1" value="25"></label>
+          <label>Kargo (₺)<input id="shipping" type="number" min="0" step="0.01" value="69.9"></label>
+          <label>Paketleme (₺)<input id="packaging" type="number" min="0" step="0.01" value="8"></label>
+        </div>
+        <label>Diğer giderler (₺)<input id="other" type="number" min="0" step="0.01" value="0"></label>
+        <p class="hint">Alanlar değiştikçe sonuçlar otomatik güncellenir.</p>
+      </form>
+
+      <section class="results">
+        <div class="metric primary"><span>Net kâr</span><strong id="profit">—</strong></div>
+        <div class="metric"><span>ROI</span><strong id="roi">—</strong></div>
+        <div class="metric"><span>Kâr marjı</span><strong id="margin">—</strong></div>
+        <div class="metric"><span>Başabaş satış</span><strong id="breakEven">—</strong></div>
+        <div class="metric highlight"><span>Maksimum alış fiyatı</span><strong id="maxBuy">—</strong></div>
+        <div class="metric"><span>Hedef ROI için satış</span><strong id="requiredSale">—</strong></div>
+
+        <article class="panel waterfall">
+          <h2>Kâr dökümü</h2>
+          <div class="row"><span>Satış fiyatı</span><b id="wfSale">—</b></div>
+          <div class="row negative"><span>Ürün maliyeti</span><b id="wfPurchase">—</b></div>
+          <div class="row negative"><span>Komisyon</span><b id="wfCommission">—</b></div>
+          <div class="row negative"><span>Reklam</span><b id="wfAdvertising">—</b></div>
+          <div class="row negative"><span>İade rezervi</span><b id="wfReturns">—</b></div>
+          <div class="row negative"><span>Kargo + paket + diğer</span><b id="wfFixed">—</b></div>
+          <div class="row total"><span>Net kâr</span><b id="wfProfit">—</b></div>
+        </article>
+
+        <article class="panel negotiate">
+          <h2>Satın alma kararı</h2>
+          <p id="purchaseAdvice">—</p>
+        </article>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
