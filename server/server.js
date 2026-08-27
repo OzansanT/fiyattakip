@@ -12,7 +12,6 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ENV_PATH = path.join(ROOT, '.env');
-const PORT = Number(process.env.PORT) || 8000;
 const DAILY_REFRESH_MS = 24 * 60 * 60 * 1000;
 
 async function loadDotEnv() {
@@ -34,6 +33,7 @@ async function loadDotEnv() {
 
 await loadDotEnv();
 
+const PORT = Number(process.env.PORT) || 8000;
 const trendyolConfig = {
   sellerId: process.env.TRENDYOL_SELLER_ID,
   apiKey: process.env.TRENDYOL_API_KEY,
@@ -51,6 +51,7 @@ const contentTypes = {
   '.jpeg': 'image/jpeg',
   '.ico': 'image/x-icon'
 };
+const publicPrefixes = ['/css/', '/js/', '/data/'];
 
 function json(res, status, payload) {
   res.writeHead(status, {
@@ -118,8 +119,15 @@ async function handleApi(req, res, url) {
   return false;
 }
 
-async function serveStatic(req, res, url) {
+async function serveStatic(res, url) {
   const pathname = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
+  const allowed = pathname === '/index.html' || publicPrefixes.some(prefix => pathname.startsWith(prefix));
+  if (!allowed || pathname.split('/').some(segment => segment.startsWith('.'))) {
+    res.writeHead(404);
+    res.end('Not found');
+    return;
+  }
+
   const requested = path.resolve(ROOT, `.${pathname}`);
   if (!requested.startsWith(ROOT + path.sep)) {
     res.writeHead(403);
@@ -151,7 +159,7 @@ const server = http.createServer(async (req, res) => {
       json(res, 404, { error: 'API route not found.' });
       return;
     }
-    await serveStatic(req, res, url);
+    await serveStatic(res, url);
   } catch (error) {
     console.error(error);
     if (!res.headersSent) json(res, 500, { error: 'Internal server error.' });
