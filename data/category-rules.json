@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "currency": "TRY",
+  "categories": {
+    "general": {"name":"Genel","commissionRate":18,"advertisingRate":2,"returnReserveRate":3,"shipping":69.9,"packaging":8,"targetRoi":25},
+    "electronics": {"name":"Elektronik","commissionRate":12,"advertisingRate":2,"returnReserveRate":4,"shipping":69.9,"packaging":10,"targetRoi":25},
+    "home": {"name":"Ev & Yaşam","commissionRate":17,"advertisingRate":2,"returnReserveRate":3,"shipping":79.9,"packaging":12,"targetRoi":25},
+    "fashion": {"name":"Moda","commissionRate":20,"advertisingRate":3,"returnReserveRate":8,"shipping":69.9,"packaging":8,"targetRoi":25}
+  }
+}
