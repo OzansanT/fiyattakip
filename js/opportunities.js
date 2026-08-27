@@ -19,6 +19,22 @@ export function buildOpportunity({ name, category, inputs, id, createdAt } = {})
   };
 }
 
+export function filterOpportunities(items, filters = {}) {
+  const query = String(filters.query || '').trim().toLocaleLowerCase('tr-TR');
+  const minRoi = Number(filters.minRoi);
+  const status = String(filters.status || 'all');
+
+  return [...items].filter(item => {
+    if (query) {
+      const haystack = `${item.name || ''} ${item.category || ''}`.toLocaleLowerCase('tr-TR');
+      if (!haystack.includes(query)) return false;
+    }
+    if (Number.isFinite(minRoi) && Number(item.roi) < minRoi) return false;
+    if (status !== 'all' && item.status !== status) return false;
+    return true;
+  });
+}
+
 export function sortOpportunities(items, sortBy = 'updatedAt') {
   const copy = [...items];
   const numericDesc = key => (a, b) => (Number(b[key]) || 0) - (Number(a[key]) || 0);
