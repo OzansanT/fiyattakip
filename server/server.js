@@ -3,11 +3,12 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  ATTRIBUTE_CACHE_TTL_MS,
   CACHE_TTL_MS,
+  getCategoryAttributeCache,
   getCategoryCache,
   hasCredentials,
-  readCategoryCache,
-  refreshCategoryCache
+  readCategoryCache
 } from './trendyol-categories.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -74,6 +75,25 @@ async function categoryPayload(force = false) {
   };
 }
 
+async function attributePayload(categoryId, force = false) {
+  const cache = await getCategoryAttributeCache(categoryId, trendyolConfig, {
+    force,
+    ttlMs: ATTRIBUTE_CACHE_TTL_MS
+  });
+  return {
+    configured: hasCredentials(trendyolConfig),
+    categoryId: cache.categoryId,
+    categoryName: cache.categoryName || null,
+    displayName: cache.displayName || null,
+    fetchedAt: cache.fetchedAt,
+    stale: Boolean(cache.stale),
+    refreshed: Boolean(cache.refreshed),
+    refreshError: cache.refreshError || null,
+    stats: cache.stats,
+    attributes: cache.attributes
+  };
+}
+
 async function handleApi(req, res, url) {
   if (url.pathname === '/api/trendyol/categories' && req.method === 'GET') {
     try {
@@ -113,6 +133,27 @@ async function handleApi(req, res, url) {
       stale: cache?.fetchedAt ? Date.now() - Date.parse(cache.fetchedAt) >= CACHE_TTL_MS : true,
       stats: cache?.stats || null
     });
+    return true;
+  }
+
+  const attributeMatch = url.pathname.match(/^\/api\/trendyol\/categories\/(\d+)\/attributes(?:\/(refresh))?$/);
+  if (attributeMatch) {
+    const categoryId = Number(attributeMatch[1]);
+    const force = attributeMatch[2] === 'refresh';
+    const expectedMethod = force ? 'POST' : 'GET';
+    if (req.method !== expectedMethod) {
+      json(res, 405, { error: `Use ${expectedMethod} for this endpoint.` });
+      return true;
+    }
+    if (!hasCredentials(trendyolConfig)) {
+      json(res, 503, { configured: false, error: 'Trendyol credentials are not configured.' });
+      return true;
+    }
+    try {
+      json(res, 200, await attributePayload(categoryId, force));
+    } catch (error) {
+      json(res, 502, { configured: true, categoryId, error: error.message });
+    }
     return true;
   }
 
@@ -175,7 +216,7 @@ server.listen(PORT, () => {
 if (hasCredentials(trendyolConfig)) {
   getCategoryCache(trendyolConfig).catch(error => console.error('Initial Trendyol category sync failed:', error.message));
   const timer = setInterval(() => {
-    refreshCategoryCache(trendyolConfig)
+    getCategoryCache(trendyolConfig, { force: true })
       .then(cache => console.log(`Trendyol categories refreshed: ${cache.fetchedAt}`))
       .catch(error => console.error('Scheduled Trendyol category refresh failed:', error.message));
   }, DAILY_REFRESH_MS);
