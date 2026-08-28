@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import sys
 import time
 from dataclasses import dataclass, asdict
 from typing import Iterable
@@ -147,8 +146,17 @@ def find_cards(soup: BeautifulSoup) -> list[Tag]:
 
 
 def extract_title(card: Tag) -> str:
+    brand_node = card.select_one(".prdct-desc-cntnr-ttl")
+    name_node = card.select_one(".prdct-desc-cntnr-name")
+    brand = clean_text(brand_node.get_text(" ", strip=True) if brand_node else "")
+    name = clean_text(name_node.get_text(" ", strip=True) if name_node else "")
+    if name:
+        if brand and not name.casefold().startswith(brand.casefold()):
+            return clean_text(f"{brand} {name}")
+        return name
+
     pieces: list[str] = []
-    for selector in TITLE_SELECTORS:
+    for selector in TITLE_SELECTORS[2:]:
         for node in card.select(selector):
             text = clean_text(node.get_text(" ", strip=True))
             if text:
@@ -201,6 +209,8 @@ def extract_metadata(card: Tag, title: str, prices: list[str]) -> list[str]:
         text = clean_text(raw)
         key = text.casefold()
         if not text or key == title_key or key in price_keys:
+            continue
+        if len(text) >= 3 and (title_key.startswith(key) or title_key.endswith(key)):
             continue
         if TL_RE.fullmatch(text):
             continue
