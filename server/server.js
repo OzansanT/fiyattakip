@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +14,9 @@ import { fetchProductsByCategory, normalizeProductCount } from './trendyol-produ
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ENV_PATH = path.join(ROOT, '.env');
+const SCRAPER_PATH = path.join(ROOT, 'server', 'trendyol_scraper.py');
+const MAX_BODY_BYTES = 32 * 1024;
+const MAX_SCRAPER_OUTPUT_BYTES = 8 * 1024 * 1024;
 
 async function loadDotEnv() {
   try {
@@ -59,6 +63,108 @@ function json(res, status, payload) {
     'Cache-Control': 'no-store'
   });
   res.end(JSON.stringify(payload));
+}
+
+function normalizeListingCount(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return 10;
+  return Math.min(200, Math.max(1, parsed));
+}
+
+function validateListingUrl(value) {
+  const url = new URL(String(value || ''));
+  const hostname = url.hostname.toLowerCase();
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Only http/https URLs are supported.');
+  if (hostname !== 'trendyol.com' && !hostname.endsWith('.trendyol.com')) {
+    throw new Error('Only trendyol.com listing URLs are allowed.');
+  }
+  return url.toString();
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.setEncoding('utf8');
+    req.on('data', chunk => {
+      body += chunk;
+      if (Buffer.byteLength(body, 'utf8') > MAX_BODY_BYTES) {
+        reject(new Error('Request body is too large.'));
+        req.destroy();
+      }
+    });
+    req.on('end', () => {
+      if (!body) return resolve({});
+      try {
+        resolve(JSON.parse(body));
+      } catch {
+        reject(new Error('Request body must be valid JSON.'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function runPython(command, url, limit) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, [SCRAPER_PATH, '--url', url, '--limit', String(limit)], {
+      cwd: ROOT,
+      env: process.env,
+      windowsHide: true
+    });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill('SIGKILL');
+      reject(new Error('Trendyol scraping timed out after 75 seconds.'));
+    }, 75_000);
+
+    child.stdout.on('data', chunk => {
+      stdout += chunk.toString('utf8');
+      if (Buffer.byteLength(stdout, 'utf8') > MAX_SCRAPER_OUTPUT_BYTES && !settled) {
+        settled = true;
+        clearTimeout(timer);
+        child.kill('SIGKILL');
+        reject(new Error('Scraper output exceeded the safety limit.'));
+      }
+    });
+    child.stderr.on('data', chunk => { stderr += chunk.toString('utf8'); });
+    child.on('error', error => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on('close', code => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      let payload;
+      try {
+        payload = JSON.parse(stdout || '{}');
+      } catch {
+        return reject(new Error(`Python scraper returned invalid JSON${stderr ? `: ${stderr.slice(0, 400)}` : ''}`));
+      }
+      if (code !== 0 || payload.error) {
+        return reject(new Error(payload.error || stderr.trim() || `Python scraper exited with code ${code}.`));
+      }
+      resolve(payload);
+    });
+  });
+}
+
+async function runListingScraper(url, limit) {
+  const preferred = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
+  try {
+    return await runPython(preferred, url, limit);
+  } catch (error) {
+    if (process.env.PYTHON_BIN || error?.code !== 'ENOENT') throw error;
+    const fallback = preferred === 'python' ? 'python3' : 'python';
+    return runPython(fallback, url, limit);
+  }
 }
 
 async function categoryNamesPayload(force = false) {
@@ -132,6 +238,23 @@ async function handleApi(req, res, url) {
   return false;
 }
 
+async function handleScrape(req, res, url) {
+  if (url.pathname !== '/scrape/trendyol' || req.method !== 'POST') return false;
+  try {
+    const body = await readJsonBody(req);
+    const listingUrl = validateListingUrl(body.url);
+    const limit = normalizeListingCount(body.limit);
+    const payload = await runListingScraper(listingUrl, limit);
+    json(res, 200, payload);
+  } catch (error) {
+    json(res, 502, {
+      error: error.message,
+      hint: 'Install Python dependencies with: pip install -r requirements.txt. For rendered fallback also run: python -m playwright install chromium'
+    });
+  }
+  return true;
+}
+
 async function serveStatic(res, url) {
   const pathname = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
   const allowed = pathname === '/index.html' || publicPrefixes.some(prefix => pathname.startsWith(prefix));
@@ -167,6 +290,7 @@ async function serveStatic(res, url) {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    if (await handleScrape(req, res, url)) return;
     if (url.pathname.startsWith('/api/')) {
       if (await handleApi(req, res, url)) return;
       json(res, 404, { error: 'API route not found.' });
@@ -182,6 +306,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`FiyatTakip running at http://localhost:${PORT}`);
-  console.log(`Trendyol bridge: ${hasCredentials(trendyolConfig) ? 'configured' : 'credentials missing'}`);
-  console.log('No Trendyol request is made until you click a fetch/refresh button in the UI.');
+  console.log('Public listing scraper: Python, no Trendyol API, image/font/media requests blocked in browser fallback.');
+  console.log(`Legacy seller bridge: ${hasCredentials(trendyolConfig) ? 'configured' : 'credentials missing'} (not used by the listing scraper).`);
 });

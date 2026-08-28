@@ -6,6 +6,7 @@
   <title>FiyatTakip — Kârlılık Analizi</title>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/trendyol-picker.css">
+  <link rel="stylesheet" href="css/trendyol-scraper.css">
 </head>
 <body>
   <main class="app-shell">
@@ -13,63 +14,65 @@
       <div>
         <p class="eyebrow">FiyatTakip MVP</p>
         <h1>Ürün almaya değer mi?</h1>
-        <p>Önce yalnızca Trendyol kategori adlarını getir; sonra istediğin kategoriyi ve ürün sayısını seçerek mağaza ürünlerini kontrollü biçimde al.</p>
+        <p>Trendyol liste sayfasını doğrudan oku; ürün adını, sayfada yazan TL fiyatlarını ve karttaki satış/kampanya gibi ek metinleri incele.</p>
       </div>
       <div id="decision" class="decision bad">HESAPLANIYOR</div>
     </header>
 
-    <section class="panel trendyol-picker-panel">
-      <div class="picker-header">
+    <section class="panel trendyol-scraper-panel">
+      <div class="scraper-header">
         <div>
-          <p class="eyebrow">Trendyol kontrollü getirme</p>
-          <h2>1. Kategori adlarını getir → 2. Kategori seç → 3. Ürün sayısını belirle</h2>
-          <p class="hint">Sayfa açılırken Trendyol'a otomatik istek yapılmaz. Ürünler yalnızca sen “Ürünleri Getir” dediğinde istenir.</p>
-        </div>
-        <div class="picker-actions">
-          <button id="fetchTrendyolCategoryNames" class="secondary-action" type="button">Kategori Adlarını Getir</button>
-          <button id="refreshTrendyolCategoryNames" class="secondary-action" type="button">Kategori Adlarını Yenile</button>
+          <p class="eyebrow">Python Trendyol liste tarayıcı</p>
+          <h2>Public sayfadan ürünleri getir — Trendyol API kullanmadan</h2>
+          <p class="hint">Görseller alınmaz. Render fallback kullanılırsa image/font/media istekleri tarayıcı seviyesinde engellenir.</p>
         </div>
       </div>
 
-      <div class="category-sync-meta">
-        <span id="trendyolCategoryStatus" class="sync-badge">Henüz Trendyol isteği yapılmadı.</span>
-        <span id="trendyolCategoryStats" class="hint">Önce kategori adlarını getir.</span>
+      <div class="scraper-controls">
+        <label>Trendyol liste URL'si
+          <input id="trendyolListingUrl" type="url" spellcheck="false" value="https://www.trendyol.com/sirali-urunler?categoryId=109664&amp;type=bestSeller&amp;webGenderId=0">
+        </label>
+        <label>Kaç ürün?
+          <input id="trendyolListingCount" type="number" min="1" max="200" step="1" value="10">
+        </label>
+        <label>Satır başına ürün
+          <select id="trendyolListingColumns">
+            <option value="1" selected>1 — Liste / tam metin</option>
+            <option value="2">2 — Kompakt</option>
+            <option value="3">3 — Kompakt</option>
+            <option value="4">4 — Kompakt</option>
+          </select>
+        </label>
       </div>
 
-      <div class="picker-grid">
-        <div class="category-picker">
-          <label>Kategori ara
-            <input id="trendyolCategorySearch" type="search" placeholder="Örn. mouse, kahve, sandalye">
-          </label>
-          <label>Trendyol yaprak kategorisi
-            <select id="trendyolCategorySelect" size="8" aria-label="Trendyol kategori adları">
-              <option value="">Önce kategori adlarını getir</option>
-            </select>
-          </label>
-          <div class="selected-category-card">
-            <span>Seçilen kategori</span>
-            <strong id="trendyolSelectedCategory">Kategori seçilmedi.</strong>
-          </div>
-        </div>
-
-        <div class="product-fetch-control">
-          <label>Kaç ürün getirilsin?
-            <input id="trendyolProductCount" type="number" min="1" max="100" step="1" value="10">
-          </label>
-          <button id="fetchTrendyolProducts" class="primary-action" type="button" disabled>Ürünleri Getir</button>
-          <p id="trendyolProductStatus" class="hint" aria-live="polite">Kategori seçildiğinde ürün getirme aktif olur.</p>
-          <p class="hint">Trendyol V2, onaylı mağaza ürünlerini doğrudan kategori ID ile filtrelemiyor. FiyatTakip sayfa sayfa kontrol eder, istediğin adet bulununca durur ve en fazla 10 sayfa tarar.</p>
-        </div>
+      <div class="scraper-actions">
+        <button id="scrapeTrendyolListing" class="primary-action" type="button">10 Ürün Getir</button>
+        <button id="scrapeTrendyolMore" class="secondary-action" type="button" disabled>+10 Daha Getir</button>
       </div>
 
-      <div id="trendyolProductEmpty" class="empty-state">Henüz ürün isteği yapılmadı.</div>
-      <div class="table-wrap">
-        <table id="trendyolProductTable" hidden>
-          <thead><tr><th>Ürün</th><th>Kategori</th><th>Satış</th><th>Stok</th><th>Varyant</th><th></th></tr></thead>
-          <tbody id="trendyolProductRows"></tbody>
-        </table>
+      <div class="scraper-status-row">
+        <span id="trendyolListingStatus" class="sync-badge">Henüz liste isteği yapılmadı.</span>
+        <p class="scraper-note">1 ürün/satır seçildiğinde ürün adı ve tüm yakalanan alt bilgiler sınırsız gösterilir. Çoklu sütunda başlık ve alt bilgiler kompakt kalır.</p>
       </div>
+
+      <div id="trendyolListingEmpty" class="empty-state">Ürünleri görmek için “Ürün Getir” düğmesine bas.</div>
+      <div id="trendyolListingProducts" class="listing-products" data-columns="1" hidden></div>
     </section>
+
+    <div hidden aria-hidden="true">
+      <button id="fetchTrendyolCategoryNames" type="button"></button>
+      <button id="refreshTrendyolCategoryNames" type="button"></button>
+      <span id="trendyolCategoryStatus"></span>
+      <span id="trendyolCategoryStats"></span>
+      <input id="trendyolCategorySearch" type="search">
+      <select id="trendyolCategorySelect"><option value=""></option></select>
+      <strong id="trendyolSelectedCategory"></strong>
+      <input id="trendyolProductCount" type="number" value="10">
+      <button id="fetchTrendyolProducts" type="button" disabled></button>
+      <span id="trendyolProductStatus"></span>
+      <div id="trendyolProductEmpty"></div>
+      <table id="trendyolProductTable" hidden><tbody id="trendyolProductRows"></tbody></table>
+    </div>
 
     <section class="grid">
       <form id="calculator-form" class="panel controls">
@@ -83,7 +86,7 @@
             <option value="fashion">Moda</option>
           </select>
         </label>
-        <p class="hint">Maliyet profili şimdilik Trendyol kategori kimliğinden ayrıdır; örnek komisyon varsayımlarını temsil eder.</p>
+        <p class="hint">Maliyet profili komisyon ve gider varsayımlarını temsil eder.</p>
         <div class="two-col">
           <label>Alış fiyatı (₺)<input id="purchasePrice" type="number" min="0" step="0.01" value="480"></label>
           <label>Satış fiyatı (₺)<input id="salePrice" type="number" min="0" step="0.01" value="899"></label>
@@ -178,5 +181,6 @@
     </section>
   </main>
   <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/trendyol-scraper-ui.js"></script>
 </body>
 </html>
