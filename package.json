@@ -1,11 +1,11 @@
 {
   "name": "fiyattakip",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server/server.js",
-    "test": "node --check js/app.js && node --check server/server.js && node --test"
+    "test": "node --check js/app.js && node --check js/trendyol-scraper-ui.js && node --check server/server.js && node --test"
   },
   "engines": {
     "node": ">=20"
